@@ -6,8 +6,8 @@ Console Off
 $VersionInfo:CompanyName=SpriggsySpriggs
 $VersionInfo:FileDescription=QB64 Win32 Video Player (Unicode)
 $VersionInfo:ProductName=QB64 Win32 Video Player (Unicode)
-$VersionInfo:ProductVersion=1,0,0,2
-$VersionInfo:FileVersion=1,0,0,2
+$VersionInfo:ProductVersion=1,0,0,4
+$VersionInfo:FileVersion=1,0,0,4
 $VersionInfo:LegalCopyright=2022 SpriggsySpriggs
 $VersionInfo:Web=https://github.com/SpriggsySpriggs/QB64-Win32-Video-Player
 $VersionInfo:Comments=The Unicode build of the QB64 Win32 Video Player
@@ -161,10 +161,10 @@ Icon
 
 CreateIcons
 
-Dim Shared As Offset parentWin, hInstance, videoWin, playpauseBtn, seekLbtn, seekRbtn, trackbar, statusbar 'openBtn,
+Dim Shared As Offset parentWin, hInstance, videoWin, playpauseBtn, seekLbtn, seekRbtn, trackbar, statusbar, bmpSource, hdcSource, hdcDestination 'openBtn,
 Dim Shared As Unsigned Long AboutMenu: AboutMenu = 99
 Dim Shared As Long isOpen: isOpen = 0
-Dim Shared As Byte isAudioFile: isAudioFile = 0
+
 hInstance = GetModuleHandle(0)
 
 StartUp
@@ -187,7 +187,7 @@ Sub StartUp ()
     If reg = 0 Then System
 
     Dim As String parentTitle: parentTitle = "QB64 Win32 Video Player" + Chr$(0)
-    parentWin = CreateWindowEx(0, MAKELPARAM(reg, 0), Offset(parentTitle), &H00010000 Or WS_OVERLAPPED Or WS_CAPTION Or WS_SYSMENU Or WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 1280, 900, 0, 0, hInstance, 0)
+    parentWin = CreateWindowEx(0, MAKELPARAM(reg, 0), Offset(parentTitle), WS_OVERLAPPED Or WS_CAPTION Or WS_SYSMENU Or WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 1280, 900, 0, 0, hInstance, 0)
     If parentWin = 0 Then System
 
     Dim As String class: class = WC_BUTTON + Chr$(0)
@@ -233,6 +233,11 @@ Sub StartUp ()
     End If
 
     SetTimer parentWin, 1, 500, 0
+    MoveWindow playpauseBtn, (WindowWidth(parentWin) / 2) - 20, WindowHeight(parentWin) - 80, 40, 30, -1
+    MoveWindow seekLbtn, (WindowWidth(parentWin) / 2) - 60, WindowHeight(parentWin) - 80, 40, 30, -1
+    MoveWindow seekRbtn, (WindowWidth(parentWin) / 2) + 20, WindowHeight(parentWin) - 80, 40, 30, -1
+    MoveWindow trackbar, 5, WindowHeight(parentWin) - 110, WindowWidth(parentWin) - 20, 30, -1
+
 
     While GetMessage(Offset(msg), 0, 0, 0)
         TranslateMessage Offset(msg)
@@ -308,10 +313,11 @@ Function WindowProc%& (hwnd As Offset, uMsg As Unsigned Long, wParam As Unsigned
             End Select
             Select Case LOWORD(Val(Str$(wParam)))
                 Case AboutMenu
-                    Print LOWORD(Val(Str$(wParam))), LOWORD(Val(Str$(lParam)))
+                    'Print LOWORD(Val(Str$(wParam))), LOWORD(Val(Str$(lParam)))
                     AboutPopup
                 Case AboutMenu + 1
-                    Dim As Offset video: video = ComDlgFileName("Select Video or Song", Dir$("videos"), "Video Files (*.AVI, *.MP4, *.MKV, *.MPG, *.WMV)|*.AVI;*.MP4;*.MKV;*.MPG;*.WMV|Audio Files (*.MP3, *.FLAC, *.M4A, *.WAV)|*.MP3;*.FLAC;*.M4A;*.WAV", 1, UNICODE)
+                    Dim As Unsigned Long filterindex: filterindex = 0
+                    Dim As Offset video: video = ComDlgFileName("Select Video or Music File", Dir$("videos"), "Video Files (*.AVI, *.MP4, *.MKV, *.MPG, *.WMV)|*.AVI;*.MP4;*.MKV;*.MPG;*.WMV|Audio Files (*.MP3, *.WAV, *.M4A, *.FLAC)|*.MP3;*.WAV;*.M4A;*.FLAC", filterindex, UNICODE)
                     If video <> 0 Then
                         If CheckExtension(video) Then
                             If isPlaying = "playing" Or isPlaying = "paused" Then
@@ -320,7 +326,7 @@ Function WindowProc%& (hwnd As Offset, uMsg As Unsigned Long, wParam As Unsigned
                                 If video <> 0 Then
                                     qPlay PointerToWideString(video)
                                     videoWin = VideoHandle
-                                    Print videoWin
+                                    'Print videoWin
                                     SetWindow videoWin
                                 End If
                             End If
@@ -331,25 +337,15 @@ Function WindowProc%& (hwnd As Offset, uMsg As Unsigned Long, wParam As Unsigned
             End Select
             Exit Case
         Case WM_HSCROLL
-            Print "Scrolled"
-            Print GetTrackBarVal
             SetVideoPos
-        Case WM_SIZE
-            Select Case wParam
-                Case 2, 0
-                    Print WindowWidth(parentWin), WindowHeight(parentWin)
-                    MoveWindow playpauseBtn, (WindowWidth(parentWin) / 2) - 20, WindowHeight(parentWin) - 80, 40, 30, -1
-                    MoveWindow seekLbtn, (WindowWidth(parentWin) / 2) - 60, WindowHeight(parentWin) - 80, 40, 30, -1
-                    MoveWindow seekRbtn, (WindowWidth(parentWin) / 2) + 20, WindowHeight(parentWin) - 80, 40, 30, -1
-                    MoveWindow trackbar, 5, WindowHeight(parentWin) - 110, WindowWidth(parentWin) - 20, 30, -1
-                    If videoWin And isPlaying = "playing" Or isPlaying = "paused" And isAudioFile = 0 Then
-                        If WindowWidth(parentWin) = 1280 And WindowHeight(parentWin) = 900 Then
-                            SizeVideoWindow 1280, 720
-                        Else
-                            SizeVideoWindow WindowWidth(parentWin) - 100, WindowHeight(parentWin) - 100
-                        End If
-                    End If
-            End Select
+            'Case WM_SIZE
+            '    Select Case wParam
+            '        Case 2, 0
+            '            Print WindowWidth(parentWin), WindowHeight(parentWin)
+            '            If videoWin And isPlaying = "playing" Or isPlaying = "paused" And isAudioFile = 0 Then
+            '                SizeVideoWindow
+            '            End If
+            '    End Select
         Case MM_MCINOTIFY
             Select Case wParam
                 Case MCI_NOTIFY_ABORTED
@@ -396,9 +392,9 @@ End Sub
 Function OpenMediaFile~& (fileName As String)
     ClosePlayer
     Dim As Unsigned Long mciError
-    Dim As String playCommand: playCommand = ANSIToUnicode("Open " + Chr$(34)) + fileName + ANSIToUnicode(Chr$(34) + " type mpegvideo alias movie parent " + Trim$(Str$(parentWin)) + " style child" + Chr$(0))
+    Dim As String playCommand: playCommand = ANSIToUnicode("Open " + Chr$(34)) + fileName + ANSIToUnicode(Chr$(34) + " type mpegvideo alias movie parent" + Str$(parentWin) + " style child" + Chr$(0))
     mciError = mciSendStringW(playCommand, 0, 0, 0)
-    Print mciError
+    'Print mciError
     If mciError <> 0 Then
         Dim As String errString: errString = Space$(128 * 2)
         mciGetErrorStringW mciError, Offset(errString), 128 * 2
@@ -411,14 +407,9 @@ Function OpenMediaFile~& (fileName As String)
 End Function
 
 Sub qPlay (fileName As String)
+    Dim As String ofile: ofile = fileName
     If OpenMediaFile(fileName) = 0 Then
-        If isAudioFile = 0 Then
-            If WindowWidth(parentWin) = 1280 And WindowHeight(parentWin) = 900 Then
-                SizeVideoWindow 1280, 720
-            Else
-                SizeVideoWindow WindowWidth(parentWin) - 100, WindowHeight(parentWin) - 100
-            End If
-        End If
+        SizeVideoWindow
         PlayMediaFile
     Else
         qStop
@@ -496,6 +487,8 @@ End Sub
 
 Sub qStop ()
     ClosePlayer
+    'If albumimage Then FreeImage albumimage
+    'ScreenHide
     ToggleEnable playpauseBtn, 0
     ToggleEnable seekLbtn, 0
     ToggleEnable seekRbtn, 0
@@ -512,7 +505,7 @@ Sub ClosePlayer ()
 End Sub
 
 Sub AboutPopup
-    Print "About"
+    'Print "About"
 
     Dim As Offset hr
 
@@ -531,7 +524,7 @@ Sub AboutPopup
     Dim As String szBodyText: szBodyText = ANSIToUnicode("This program is still in its early stages. I am looking to add new features to it each and every day. Please download the <A HREF=" + Chr$(34) + "https://codecguide.com/download_k-lite_codec_pack_full.htm" + Chr$(34) + ">K-Lite Codec Pack (Full)</A> to get the latest codecs so that you may fully enjoy this program." + Chr$(0))
     tdconfig.pszContent = Offset(szBodyText)
 
-    Dim As String szFooter: szFooter = ANSIToUnicode("Visit my <A HREF=" + Chr$(34) + "https://github.com/SpriggsySpriggs/QB64-Win32-Video-Player" + Chr$(34) + ">GitHub repo</A> for this project" + Chr$(0))
+    Dim As String szFooter: szFooter = ANSIToUnicode("Visit my <A HREF=" + Chr$(34) + "https://github.com/SpriggsySpriggs/QB64-Video-Video-Player" + Chr$(34) + ">GitHub repo</A> for this project" + Chr$(0))
     tdconfig.pszFooter = Offset(szFooter)
 
     tdconfig.nDefaultButton = IDYES
@@ -587,7 +580,7 @@ Sub AlreadyPlayingPopup (filename As String)
 End Sub
 
 Sub ErrorPopup (eTitle As String, mciErrString As String, errMessage As String)
-    Print "ErrorPopup"
+    'Print "ErrorPopup"
 
     Dim As TASKDIALOGCONFIG tdconfig
     tdconfig.dwCommonButtons = TDCBF_OK_BUTTON
@@ -738,20 +731,15 @@ End Sub
 Function CheckExtension%% (fileName As Offset)
     Declare CustomType Library
         Function CharUpperW%& (ByVal lpsz As Offset)
-        Sub wprintf (ByVal format As Offset)
+        'Sub wprintf (ByVal format As Offset)
     End Declare
-    Dim As String avi, mp4, mkv, mpg, wmv, mp3, flac, m4a, wav
-    avi = ANSIToUnicode(".AVI"): mp4 = ANSIToUnicode(".MP4"): mkv = ANSIToUnicode(".MKV"): mpg = ANSIToUnicode(".MPG"): wmv = ANSIToUnicode(".WMV"): mp3 = ANSIToUnicode(".MP3"): flac = ANSIToUnicode(".FLAC"): m4a = ANSIToUnicode(".M4A"): wav = ANSIToUnicode(".WAV")
+    Dim As String avi, mp4, mkv, mpg, wmv ', mp3, flac, m4a, wav
+    avi = ANSIToUnicode(".AVI"): mp4 = ANSIToUnicode(".MP4"): mkv = ANSIToUnicode(".MKV"): mpg = ANSIToUnicode(".MPG"): wmv = ANSIToUnicode(".WMV") ': mp3 = ANSIToUnicode(".MP3"): flac = ANSIToUnicode(".FLAC"): m4a = ANSIToUnicode(".M4A"): wav = ANSIToUnicode(".WAV")
     Dim As String decimal: decimal = ANSIToUnicode("." + Chr$(0))
     Dim As Offset pExtension: pExtension = StrRStrIW(fileName, 0, Offset(decimal))
     Dim As String extension: extension = PointerToWideString(CharUpperW(pExtension))
     'wprintf pExtension
-    If extension = mp3 Or extension = flac Or extension = m4a Or extension = wav Then
-        isAudioFile = -1
-    Else
-        isAudioFile = 0
-    End If
-    If extension <> avi And extension <> mp4 And extension <> mkv And extension <> mpg And extension <> wmv And extension <> mp3 And extension <> flac And extension <> m4a And extension <> wav Then
+    If extension <> avi And extension <> mp4 And extension <> mkv And extension <> mpg And extension <> wmv Then ' And extension <> mp3 And extension <> flac And extension <> m4a And extension <> wav Then
         CheckExtension = 0
     Else
         CheckExtension = -1
@@ -782,7 +770,7 @@ Sub SetWindow (vhandle As Offset)
     ToggleEnable trackbar, 1
 End Sub
 
-Sub SizeVideoWindow (maxX As Unsigned Long, maxY As Unsigned Long)
+Sub SizeVideoWindow
     Dim As String size: size = GetVideoSize
     Dim As String rc(0 To 3)
     tokenize size, " ", rc()
@@ -791,40 +779,34 @@ Sub SizeVideoWindow (maxX As Unsigned Long, maxY As Unsigned Long)
     rc(3) = rc(3)
     videoX = Val(rc(2))
     videoY = Val(rc(3))
-    Dim As Single AspectRatio: AspectRatio = videoX / videoY
-    Dim As Long iLeft, iTop
-    Dim As Long newWidth: newWidth = maxX
-    Dim As Long newHeight: newHeight = newWidth \ AspectRatio
-
-    If newHeight > maxY Then
-        newHeight = maxY
-        newWidth = newHeight * AspectRatio
-        iLeft = (maxX - newWidth) \ 2
-    Else
-        iTop = (maxY - newHeight) \ 2
-    End If
     Dim As String res
-    If WindowWidth(parentWin) = 1280 And WindowHeight(parentWin) = 900 Then
-        res = "put movie window at 0 30 1280 720" + Chr$(0)
+    'Print videoX, videoY
+    If videoX > WindowWidth(parentWin) Or videoY > WindowHeight(parentWin) Then
+        Do
+            videoX = videoX / 1.25
+            videoY = videoY / 1.25
+        Loop Until videoX < WindowWidth(parentWin) And videoY < WindowHeight(parentWin) - 110
     Else
-        If videoX < maxX Or videoY < maxY Then
-            res = "put movie window at 0 30 1920 817" + Chr$(0)
-        Else
-            Print newWidth, newHeight, AspectRatio
-            Print videoX, videoY
-            res = "put movie window at" + Str$(iLeft + 125) + Str$(iTop - 10) + Str$(newWidth - 175) + Str$((newHeight - 175) + GetTitlebarSize * 4) + Chr$(0)
-        End If
+        While videoX * 1.5 < WindowWidth(parentWin) And videoY * 1.5 < WindowHeight(parentWin)
+            videoX = videoX * 1.25
+            videoY = videoY * 1.25
+        Wend
     End If
+    'Print videoX, videoY
+    Dim As Unsigned Long nX, nY
+    nX = (WindowWidth(parentWin) / 2) - (videoX / 2)
+    nY = (WindowHeight(parentWin) / 2) - (videoY / 2)
+    res = "put movie window at" + Str$(nX) + Str$(nY - 55) + Str$(videoX) + Str$(videoY) + Chr$(0)
     mciSendStringA res, 0, 0, 0
 End Sub
 
-Function GetTitlebarSize~& ()
-    Dim As POINT pt
-    Dim As RECT rc
-    ClientToScreen parentWin, Offset(pt)
-    GetWindowRect parentWin, Offset(rc)
-    GetTitlebarSize = pt.y - rc.top
-End Function
+'Function GetTitlebarSize~& ()
+'    Dim As POINT pt
+'    Dim As RECT rc
+'    ClientToScreen parentWin, Offset(pt)
+'    GetWindowRect parentWin, Offset(rc)
+'    GetTitlebarSize = pt.y - rc.top
+'End Function
 
 Sub CenterWindow (win As Offset)
     Dim As Long nX, nY
